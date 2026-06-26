@@ -56,6 +56,7 @@ from jr_client_archive.config.paths import AppPaths
 from jr_client_archive.db.base import Database
 from jr_client_archive.domain.enums import EntityType
 from jr_client_archive.services.folder_watch_service import FolderWatchService
+from jr_client_archive.ui.dialogs.backup_dialog import BackupDialog
 from jr_client_archive.ui.dialogs.client_dossier_dialog import ClientDossierDialog
 from jr_client_archive.ui.dialogs.custom_fields_manager_dialog import CustomFieldsManagerDialog
 from jr_client_archive.ui.dialogs.document_match_dialog import DocumentMatchDialog
@@ -102,10 +103,14 @@ class MainWindow(QMainWindow):
         global_search_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
         global_search_shortcut.activated.connect(self._on_global_search_clicked)
 
+        backup_button = QPushButton("Backup e ripristino...")
+        backup_button.clicked.connect(self._on_backup_clicked)
+
         buttons_layout = QHBoxLayout()
         buttons_layout.addWidget(new_client_button)
         buttons_layout.addWidget(custom_fields_button)
         buttons_layout.addWidget(global_search_button)
+        buttons_layout.addWidget(backup_button)
 
         self._stats_label = QLabel()
 
@@ -199,6 +204,13 @@ class MainWindow(QMainWindow):
         dialog.exec()
         self._reload_clients()
         self._reload_to_verify()
+
+    def _on_backup_clicked(self) -> None:
+        dialog = BackupDialog(self._database, username=self._username, parent=self)
+        dialog.exec()
+        if dialog.restored:
+            self._reload_clients()
+            self._reload_to_verify()
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if event.mimeData().hasUrls():

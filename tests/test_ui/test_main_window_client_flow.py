@@ -82,3 +82,30 @@ def test_global_search_button_opens_dialog_and_reloads_dashboard(qtbot, database
     window._on_global_search_clicked()
 
     assert called.get("opened") is True
+
+
+def test_backup_button_opens_dialog_and_reloads_only_if_restored(qtbot, database, app_paths, monkeypatch, tmp_path):
+    paths = AppPaths(root=tmp_path)
+    window = MainWindow(database=database, paths=paths)
+    qtbot.addWidget(window)
+
+    def _fake_exec_no_restore(self):
+        self.restored = False
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(main_window_module.BackupDialog, "exec", _fake_exec_no_restore)
+    window._on_backup_clicked()  # should not raise even though nothing was restored
+
+    create_client(
+        database, CreateClientRequest(client=ClientCreate(first_name="Mario", last_name="Rossi")), username="t"
+    )
+
+    def _fake_exec_restored(self):
+        self.restored = True
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(main_window_module.BackupDialog, "exec", _fake_exec_restored)
+    window._on_backup_clicked()
+
+    assert window._client_list.count() == 1
+    assert "Mario Rossi" in window._client_list.item(0).text()
