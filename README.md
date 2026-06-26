@@ -12,7 +12,7 @@ In sviluppo per fasi. Vedi [ARCHITECTURE.md](ARCHITECTURE.md) per l'architettura
 - [x] Fase 6 - Ricerca globale
 - [x] Fase 7 - Backup & restore
 - [x] Fase 8 - Licenza/demo
-- [ ] Fase 9 - Packaging
+- [x] Fase 9 - Packaging
 
 ## Requisiti
 
@@ -50,3 +50,17 @@ alembic revision --autogenerate -m "descrizione"       # genera una nuova migraz
 ```bash
 QT_QPA_PLATFORM=offscreen pytest
 ```
+
+## Packaging (creazione dell'eseguibile)
+
+L'app si distribuisce come eseguibile standalone con PyInstaller, in modalità one-folder (non one-file): l'app è interamente offline, quindi una cartella che l'utente può copiare su una chiavetta USB o in una directory di installazione è preferibile a un singolo exe compresso (avvio più rapido, niente estrazione in una directory temporanea ad ogni lancio).
+
+```bash
+source .venv/bin/activate
+pip install -e ".[dev]"
+pyinstaller packaging/jr_client_archive.spec
+```
+
+Il risultato è in `dist/jr-client-archive/`: l'eseguibile `jr-client-archive` (o `jr-client-archive.exe` su Windows) più una cartella `_internal/` con tutte le dipendenze e le risorse (tema qt-material incluso). Nessuna installazione di Python è richiesta sulla macchina di destinazione.
+
+Lo schema del database viene creato/aggiornato a runtime da `Database.create_all()` al primo avvio (non da Alembic): le migrazioni restano uno strumento di sviluppo, non fanno parte del pacchetto distribuito.
