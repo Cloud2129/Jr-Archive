@@ -29,6 +29,7 @@ from jr_client_archive.application.client_queries import (
     list_clients,
     search_clients,
 )
+from jr_client_archive.config import branding
 from jr_client_archive.config.paths import AppPaths
 from jr_client_archive.db.base import Database
 from jr_client_archive.domain.enums import EntityType
@@ -45,7 +46,7 @@ class MainWindow(QMainWindow):
         self._paths = paths
         self._username = get_current_username()
 
-        self.setWindowTitle(APP_NAME)
+        self.setWindowTitle(f"{APP_NAME} - {branding.BRAND_CLAIM}")
         self.resize(960, 640)
 
         self._search_box = QLineEdit(placeholderText="Cerca cliente per nome, codice, C.F., P.IVA...")
@@ -76,7 +77,7 @@ class MainWindow(QMainWindow):
         central.setLayout(layout)
         self.setCentralWidget(central)
 
-        self.statusBar().addWidget(QLabel(f"v{__version__} | Archivio: {paths.root}"))
+        self.statusBar().addWidget(QLabel(f"{branding.BRAND_NAME} | v{__version__} | Archivio: {paths.root}"))
 
         self._reload_clients()
 

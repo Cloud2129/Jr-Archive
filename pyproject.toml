@@ -37,6 +37,9 @@ jr-client-archive = "jr_client_archive.app:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+jr_client_archive = ["resources/themes/*.xml"]
+
 [tool.pytest.ini_options]
 qt_api = "pyside6"
 testpaths = ["tests"]

@@ -3,10 +3,12 @@ from __future__ import annotations
 from jr_client_archive.application.client_commands import CreateClientRequest, create_client
 from jr_client_archive.application.client_queries import get_client
 from jr_client_archive.application.custom_field_commands import create_definition
+from jr_client_archive.application.document_queries import list_documents_for_client
 from jr_client_archive.application.folder_queries import list_folders_for_client
 from jr_client_archive.domain.client import ClientCreate
 from jr_client_archive.domain.custom_field import CustomFieldDefinitionCreate
-from jr_client_archive.domain.enums import CustomFieldType, EntityType
+from jr_client_archive.domain.enums import CustomFieldType, DocumentStatus, EntityType
+from jr_client_archive.ui.dialogs import client_dossier_dialog as dossier_module
 from jr_client_archive.ui.dialogs.client_dossier_dialog import ClientDossierDialog
 
 
@@ -76,3 +78,51 @@ def test_dossier_save_updates_client(qtbot, database, app_paths):
 
     updated = get_client(database, client.id)
     assert updated.phone == "123456"
+
+
+def test_dossier_uploads_document_into_root_folder(qtbot, database, app_paths, monkeypatch, tmp_path):
+    client = _create_client(database)
+    dialog = ClientDossierDialog(database, client, username="t")
+    qtbot.addWidget(dialog)
+
+    source = tmp_path / "fattura.pdf"
+    source.write_bytes(b"contenuto")
+    monkeypatch.setattr(
+        dossier_module.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(source), ""))
+    )
+
+    dialog._on_upload_document()
+
+    documents = list_documents_for_client(database, client.id)
+    assert len(documents) == 1
+    assert documents[0].status == DocumentStatus.TO_VERIFY
+    assert dialog._documents_list.count() == 1
+
+
+def test_dossier_classifies_selected_document(qtbot, database, app_paths, monkeypatch, tmp_path):
+    client = _create_client(database)
+    dialog = ClientDossierDialog(database, client, username="t")
+    qtbot.addWidget(dialog)
+
+    source = tmp_path / "fattura.pdf"
+    source.write_bytes(b"contenuto")
+    monkeypatch.setattr(
+        dossier_module.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(source), ""))
+    )
+    dialog._on_upload_document()
+    dialog._documents_list.setCurrentRow(0)
+
+    from jr_client_archive.domain.document import DocumentCatalogUpdate
+
+    monkeypatch.setattr(dossier_module.DocumentCatalogDialog, "exec", lambda self: dossier_module.QDialog.DialogCode.Accepted)
+    monkeypatch.setattr(
+        dossier_module.DocumentCatalogDialog,
+        "payload",
+        lambda self: DocumentCatalogUpdate(document_type="Fattura", tags=["urgente"]),
+    )
+
+    dialog._on_classify_document()
+
+    documents = list_documents_for_client(database, client.id)
+    assert documents[0].status == DocumentStatus.CATALOGUED
+    assert documents[0].document_type == "Fattura"

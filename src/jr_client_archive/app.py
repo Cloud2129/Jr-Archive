@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication
 
 import jr_client_archive.db.models  # noqa: F401 - registers all ORM models
 from jr_client_archive import APP_NAME, __version__
+from jr_client_archive.config import branding
 from jr_client_archive.config.logging_config import configure_logging
 from jr_client_archive.config.paths import get_app_paths
 from jr_client_archive.config.settings import SettingsService
@@ -47,10 +48,16 @@ def _apply_theme(app: QApplication, database: Database) -> None:
     finally:
         session.close()
 
+    theme = str(branding.THEME_FILE) if settings.theme == branding.THEME_NAME else f"{settings.theme}.xml"
+    extra = {
+        "danger": branding.COLOR_ERROR,
+        "warning": branding.COLOR_WARNING,
+        "success": branding.COLOR_SUCCESS,
+    }
     try:
         from qt_material import apply_stylesheet
 
-        apply_stylesheet(app, theme=f"{settings.theme}.xml")
+        apply_stylesheet(app, theme=theme, extra=extra)
     except Exception:
         logger.warning("Tema qt-material non disponibile, uso lo stile predefinito.", exc_info=True)
 

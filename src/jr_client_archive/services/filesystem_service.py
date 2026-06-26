@@ -8,6 +8,7 @@ folder would mean silently losing track of whatever was already in it.
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 from jr_client_archive.utils.text import normalize_token
@@ -46,6 +47,43 @@ class FilesystemService:
         full_path.mkdir(parents=True, exist_ok=False)
         return relative_path
 
+    def copy_document_into_folder(
+        self, source_path: Path, folder_relative_path: str, desired_stem: str, extension: str
+    ) -> str:
+        """Copies a document into an existing folder, never the original.
+
+        The source file is left untouched on purpose: ingesting a document
+        must never look like deleting/moving something from wherever the
+        user dragged it from. A name conflict (two documents that would
+        sanitize to the same stem) gets a numeric suffix rather than
+        overwriting whatever is already there.
+        """
+        target_dir = self._archive_root / folder_relative_path
+        desired_filename = f"{desired_stem}.{extension}" if extension else desired_stem
+        final_filename = self._first_available_filename(target_dir, desired_filename)
+        target_path = target_dir / final_filename
+        shutil.copy2(source_path, target_path)
+        return f"{folder_relative_path}/{final_filename}"
+
+    def rename_document(self, relative_path: str, new_stem: str) -> str:
+        """Renames a document in place (same folder), checking for
+        conflicts first. Returns the path unchanged if the computed name
+        already matches - so callers can tell "renamed" from "no-op" by
+        comparing the result to the input.
+        """
+        current_path = self._archive_root / relative_path
+        extension = current_path.suffix.lstrip(".")
+        desired_filename = f"{new_stem}.{extension}" if extension else new_stem
+        if current_path.name == desired_filename:
+            return relative_path
+
+        final_filename = self._first_available_filename(current_path.parent, desired_filename)
+        target_path = current_path.parent / final_filename
+        current_path.rename(target_path)
+
+        parent_relative = str(Path(relative_path).parent)
+        return f"{parent_relative}/{final_filename}" if parent_relative != "." else final_filename
+
     def _first_available_name(self, desired_name: str) -> str:
         candidate = desired_name
         suffix = 1
@@ -53,3 +91,16 @@ class FilesystemService:
             suffix += 1
             candidate = f"{desired_name}_{suffix}"
         return candidate
+
+    def _first_available_filename(self, directory: Path, desired_filename: str) -> str:
+        candidate_path = directory / desired_filename
+        if not candidate_path.exists():
+            return desired_filename
+
+        stem, suffix = candidate_path.stem, candidate_path.suffix
+        counter = 2
+        while True:
+            candidate = f"{stem}_{counter}{suffix}"
+            if not (directory / candidate).exists():
+                return candidate
+            counter += 1

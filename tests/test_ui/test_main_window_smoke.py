@@ -12,7 +12,7 @@ def test_main_window_boots_with_empty_database(qtbot, database, tmp_path):
     window = MainWindow(database=database, paths=paths)
     qtbot.addWidget(window)
 
-    assert window.windowTitle() == "JR Client Archive"
+    assert window.windowTitle().startswith("JR Client Archive")
     assert window._client_list.count() == 1
     assert "Nessun cliente" in window._client_list.item(0).text()
 

@@ -1,21 +1,27 @@
 """'Fascicolo cliente' - view and edit one client.
 
-Documents, preview and history are deliberately out of scope here: they
-belong to Fase 3 (Gestione documenti). This dialog covers anagrafica,
-custom fields, notes, timestamps and the folder tree only.
+Preview and the drag&drop recognition engine are deliberately out of scope
+here: they belong to later Fase 3 increments. This dialog covers
+anagrafica, custom fields, notes, timestamps, the folder tree, and the
+manual document upload/classify workflow.
 """
 
 from __future__ import annotations
+
+from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QFileDialog,
     QFormLayout,
     QInputDialog,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
@@ -27,12 +33,16 @@ from PySide6.QtWidgets import (
 
 from jr_client_archive.application.client_commands import update_client
 from jr_client_archive.application.custom_field_queries import get_values_for_entity, list_definitions
+from jr_client_archive.application.document_commands import add_document, catalog_document
+from jr_client_archive.application.document_queries import list_documents_for_client
 from jr_client_archive.application.folder_commands import create_subfolder
 from jr_client_archive.application.folder_queries import list_folders_for_client
 from jr_client_archive.db.base import Database
 from jr_client_archive.domain.client import ClientRead, ClientUpdate
-from jr_client_archive.domain.enums import ClientType, EntityType
+from jr_client_archive.domain.document import DocumentRead
+from jr_client_archive.domain.enums import ClientType, DocumentStatus, EntityType
 from jr_client_archive.domain.folder import FolderRead
+from jr_client_archive.ui.dialogs.document_catalog_dialog import DocumentCatalogDialog
 from jr_client_archive.ui.widgets.custom_field_form import CustomFieldFormWidget
 
 
@@ -50,6 +60,7 @@ class ClientDossierDialog(QDialog):
         layout.addWidget(self._build_anagrafica_section())
         layout.addWidget(self._build_custom_fields_section())
         layout.addWidget(self._build_folder_section())
+        layout.addWidget(self._build_documents_section())
         layout.addWidget(self._build_timestamps_section())
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Close)
@@ -141,6 +152,79 @@ class ClientDossierDialog(QDialog):
             if not progressed:
                 break
         self._folder_tree.expandAll()
+
+    def _build_documents_section(self) -> QWidget:
+        self._documents_list = QListWidget()
+        self._reload_documents()
+
+        upload_button = QPushButton("Carica documento...")
+        upload_button.clicked.connect(self._on_upload_document)
+        classify_button = QPushButton("Classifica...")
+        classify_button.clicked.connect(self._on_classify_document)
+
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Documenti"))
+        layout.addWidget(self._documents_list)
+        layout.addWidget(upload_button)
+        layout.addWidget(classify_button)
+
+        widget = QWidget()
+        widget.setLayout(layout)
+        return widget
+
+    def _reload_documents(self) -> None:
+        self._documents_list.clear()
+        for document in list_documents_for_client(self._database, self._client.id):
+            status_label = "Da verificare" if document.status == DocumentStatus.TO_VERIFY else "Catalogato"
+            item = QListWidgetItem(f"[{status_label}] {document.original_filename} -> {document.stored_filename}")
+            item.setData(Qt.ItemDataRole.UserRole, document)
+            self._documents_list.addItem(item)
+
+    def _selected_document(self) -> DocumentRead | None:
+        item = self._documents_list.currentItem()
+        return item.data(Qt.ItemDataRole.UserRole) if item else None
+
+    def _target_folder_for_upload(self) -> FolderRead | None:
+        folder = self._selected_folder()
+        if folder is not None:
+            return folder
+        folders = list_folders_for_client(self._database, self._client.id)
+        return next((f for f in folders if f.parent_id is None), None)
+
+    def _on_upload_document(self) -> None:
+        folder = self._target_folder_for_upload()
+        if folder is None:
+            QMessageBox.warning(self, "Carica documento", "Nessuna cartella disponibile per questo cliente.")
+            return
+
+        file_path, _ = QFileDialog.getOpenFileName(self, "Seleziona documento")
+        if not file_path:
+            return
+        try:
+            add_document(self._database, self._client.id, folder.id, Path(file_path), username=self._username)
+        except Exception as exc:
+            QMessageBox.critical(self, "Errore", f"Impossibile caricare il documento:\n{exc}")
+            return
+        self._reload_documents()
+
+    def _on_classify_document(self) -> None:
+        document = self._selected_document()
+        if document is None:
+            QMessageBox.information(self, "Classifica", "Seleziona prima un documento.")
+            return
+        if document.status != DocumentStatus.TO_VERIFY:
+            QMessageBox.information(self, "Classifica", "Questo documento e' gia' catalogato.")
+            return
+
+        dialog = DocumentCatalogDialog(document, parent=self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        try:
+            catalog_document(self._database, document.id, dialog.payload(), username=self._username)
+        except Exception as exc:
+            QMessageBox.critical(self, "Errore", f"Impossibile classificare il documento:\n{exc}")
+            return
+        self._reload_documents()
 
     def _build_timestamps_section(self) -> QWidget:
         client = self._client

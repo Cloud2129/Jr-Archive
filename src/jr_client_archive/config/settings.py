@@ -17,7 +17,7 @@ from jr_client_archive.db.models.setting import AppSettingRow
 
 
 class AppSettings(BaseModel):
-    theme: str = "light_blue"
+    theme: str = "jr_solutions"
     default_username: str = "utente"
     log_level: str = "INFO"
     document_naming_pattern: str = "{client_code}_{last_name}_{first_name}_{document_type}_{document_date}"
