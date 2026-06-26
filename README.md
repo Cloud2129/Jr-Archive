@@ -7,13 +7,11 @@ Archivio documentale desktop, locale e offline per studi professionali (e adatta
 In sviluppo per fasi. Vedi [ARCHITECTURE.md](ARCHITECTURE.md) per l'architettura e la roadmap completa.
 
 - [x] Fase 1 - Fondamenta: configurazione, database, logging, shell applicativa
-- [ ] Fase 2 - Gestione clienti
-- [ ] Fase 3 - Gestione documenti
-- [ ] Fase 4 - Motore di riconoscimento
-- [ ] Fase 5 - Sincronizzazione filesystem
-- [ ] Fase 6 - Ricerca globale
-- [ ] Fase 7 - Backup & restore
-- [ ] Fase 8 - Licenza/demo
+- [x] Fase 2 - Gestione clienti
+- [x] Fase 3 - Gestione documenti (ingestione, drag&drop, anteprima, sincronizzazione watchdog)
+- [x] Fase 6 - Ricerca globale
+- [x] Fase 7 - Backup & restore
+- [x] Fase 8 - Licenza/demo
 - [ ] Fase 9 - Packaging
 
 ## Requisiti

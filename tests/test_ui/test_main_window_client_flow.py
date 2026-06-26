@@ -30,6 +30,31 @@ def test_new_client_button_refreshes_list(qtbot, database, app_paths, monkeypatc
     assert "Mario Rossi" in window._client_list.item(0).text()
 
 
+def test_license_banner_shown_during_demo(qtbot, database, app_paths, tmp_path):
+    paths = AppPaths(root=tmp_path)
+    window = MainWindow(database=database, paths=paths)
+    qtbot.addWidget(window)
+
+    assert "demo" in window._license_banner.text().lower()
+
+
+def test_license_button_opens_dialog_and_refreshes_banner(qtbot, database, app_paths, monkeypatch, tmp_path):
+    paths = AppPaths(root=tmp_path)
+    window = MainWindow(database=database, paths=paths)
+    qtbot.addWidget(window)
+
+    called = {}
+
+    def _fake_exec(self):
+        called["opened"] = True
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(main_window_module.LicenseDialog, "exec", _fake_exec)
+    window._on_license_clicked()
+
+    assert called.get("opened") is True
+
+
 def test_double_click_opens_dossier(qtbot, database, app_paths, monkeypatch, tmp_path):
     create_client(
         database, CreateClientRequest(client=ClientCreate(first_name="Mario", last_name="Rossi")), username="t"

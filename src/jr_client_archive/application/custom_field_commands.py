@@ -7,6 +7,7 @@ database by hand. Each function here is one button in that screen.
 
 from __future__ import annotations
 
+from jr_client_archive.application.license_guard import ensure_writable
 from jr_client_archive.db.base import Database
 from jr_client_archive.db.models.custom_field import CustomFieldDefinition
 from jr_client_archive.domain.custom_field import (
@@ -21,6 +22,7 @@ from jr_client_archive.services.audit_service import AuditService
 def create_definition(
     database: Database, payload: CustomFieldDefinitionCreate, *, username: str
 ) -> CustomFieldDefinitionRead:
+    ensure_writable(database)
     session = database.create_session()
     try:
         repo = CustomFieldDefinitionRepository(session)
@@ -39,6 +41,7 @@ def create_definition(
 def update_definition(
     database: Database, definition_id: int, payload: CustomFieldDefinitionUpdate, *, username: str
 ) -> CustomFieldDefinitionRead:
+    ensure_writable(database)
     session = database.create_session()
     try:
         repo = CustomFieldDefinitionRepository(session)
@@ -64,6 +67,7 @@ def delete_definition(database: Database, definition_id: int, *, username: str) 
     it does not touch any document or folder on disk, which the 'never
     delete automatically' rule is actually about.
     """
+    ensure_writable(database)
     session = database.create_session()
     try:
         repo = CustomFieldDefinitionRepository(session)
@@ -87,6 +91,7 @@ def move_definition(
     direction ('up' or 'down'). Returns the full, freshly-ordered list so
     the UI can just redraw from the result.
     """
+    ensure_writable(database)
     session = database.create_session()
     try:
         repo = CustomFieldDefinitionRepository(session)

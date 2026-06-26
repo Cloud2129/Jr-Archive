@@ -7,6 +7,7 @@ covers the user explicitly clicking "new subfolder" from the dossier.
 
 from __future__ import annotations
 
+from jr_client_archive.application.license_guard import ensure_writable
 from jr_client_archive.config.paths import get_app_paths
 from jr_client_archive.db.base import Database
 from jr_client_archive.db.models.folder import Folder
@@ -20,6 +21,7 @@ from jr_client_archive.utils.text import normalize_token
 def create_subfolder(
     database: Database, client_id: int, parent_folder_id: int, name: str, *, username: str
 ) -> FolderRead:
+    ensure_writable(database)
     session = database.create_session()
     try:
         folder_repo = FolderRepository(session)

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from jr_client_archive.application.license_guard import ensure_writable
 from jr_client_archive.config.paths import get_app_paths
 from jr_client_archive.db.base import Database
 from jr_client_archive.domain.backup import BackupInfo, RestoreResult
@@ -25,6 +26,7 @@ def list_backups() -> list[BackupInfo]:
 
 
 def restore_backup(database: Database, backup_path: Path, *, username: str) -> RestoreResult:
+    ensure_writable(database)
     result = BackupService(get_app_paths()).restore_backup(database, backup_path)
     _record_audit(
         database,

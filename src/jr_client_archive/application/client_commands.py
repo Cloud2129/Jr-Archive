@@ -15,6 +15,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from jr_client_archive.application.license_guard import ensure_can_create_client, ensure_writable
 from jr_client_archive.config.paths import get_app_paths
 from jr_client_archive.db.base import Database
 from jr_client_archive.db.models.client import Client
@@ -39,6 +40,7 @@ class CreateClientRequest:
 
 
 def create_client(database: Database, request: CreateClientRequest, *, username: str) -> ClientRead:
+    ensure_can_create_client(database)
     archive_root = get_app_paths().archive_root
     fs_service = FilesystemService(archive_root)
 
@@ -100,6 +102,7 @@ def update_client(
     client never silently renames/moves their physical folder. Folder
     operations go through ``application.folder_commands`` explicitly.
     """
+    ensure_writable(database)
     session = database.create_session()
     try:
         repo = ClientRepository(session)
@@ -126,6 +129,7 @@ def deactivate_client(database: Database, client_id: int, *, username: str) -> N
     document - consistent with the rule that nothing is removed without
     an explicit, separate action.
     """
+    ensure_writable(database)
     session = database.create_session()
     try:
         repo = ClientRepository(session)

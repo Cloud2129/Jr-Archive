@@ -9,6 +9,7 @@ from jr_client_archive.db.models.client import Client
 from jr_client_archive.db.models.custom_field import CustomFieldDefinition, CustomFieldValue
 from jr_client_archive.db.models.document import Document, DocumentHistoryEntry, Tag
 from jr_client_archive.db.models.folder import Folder
+from jr_client_archive.db.models.license import LicenseStateRow
 from jr_client_archive.db.models.setting import AppSettingRow
 
 __all__ = [
@@ -20,5 +21,6 @@ __all__ = [
     "DocumentHistoryEntry",
     "Tag",
     "Folder",
+    "LicenseStateRow",
     "AppSettingRow",
 ]

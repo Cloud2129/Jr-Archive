@@ -42,6 +42,7 @@ Tabelle principali (Fase 1):
 | `custom_field_values` | Valore tipizzato di un campo personalizzato per una entità |
 | `audit_log` | Log di business globale (accessi, modifiche, errori, backup, import) |
 | `app_settings` | Impostazioni utente, key/value |
+| `license_state` | Riga unica (Fase 8): data primo avvio, chiave di licenza attivata |
 
 ### Campi personalizzati (EAV)
 
@@ -60,4 +61,10 @@ Una `CustomFieldDefinition` descrive un campo (`label`, `field_type` tra TEXT/NU
 - `ui.main_window.MainWindow`: shell minima che elenca/cerca i clienti, a dimostrazione che l'intero stack (Qt -> application -> repository -> SQLite) funziona end-to-end.
 - Test pytest su migrazioni, repository, servizi e smoke test della UI in modalità offscreen.
 
-Le funzionalità descritte nelle fasi successive (CRUD clienti completo, drag&drop, motore di riconoscimento, sync filesystem, ricerca globale, backup, licenza demo, packaging) non sono ancora implementate: lo schema e l'infrastruttura sono già pronti a riceverle senza richiedere modifiche retroattive.
+Le fasi successive (CRUD clienti completo, drag&drop, motore di riconoscimento, sync filesystem, ricerca globale, backup, licenza/demo) sono state implementate sopra queste fondamenta senza modifiche retroattive allo schema o all'architettura a livelli. Resta da fare solo la Fase 9 (packaging).
+
+## Fase 8 - licenza & demo
+
+Nessuna chiamata di rete, mai: la verifica della licenza è una firma Ed25519 controllata interamente offline (`utils.license_signing`). L'app distribuita contiene solo la chiave pubblica; la chiave privata resta fuori dal repository, usata da uno script di sviluppo separato (`scripts/generate_license.py`) per emettere le chiavi da consegnare ai clienti.
+
+Al primo avvio viene scritta una sola volta `license_state.first_launch_at` (riga singola, `id=1`), che fissa in modo permanente l'inizio della finestra di demo di 60 giorni. Senza una licenza attivata, `LicenseService.status()` calcola due limiti indipendenti: `is_read_only` (scaduta la demo: blocca ogni comando di scrittura) e `client_limit_reached` (raggiunti 150 clienti: blocca solo la creazione di nuovi clienti). `application.license_guard` espone `ensure_writable`/`ensure_can_create_client`, richiamati da ogni comando applicativo che scrive dati; l'eccezione che sollevano arriva in UI tramite il pattern `except Exception` → `QMessageBox.critical` già presente in ogni dialogo, senza bisogno di disabilitare pulsanti. `backup_commands.create_backup` resta volutamente non protetto (l'export dei dati deve restare sempre possibile anche in sola lettura); `external_sync_commands.reconcile_external_move` resta volutamente non protetto (il file è già stato spostato su disco: rifiutare l'aggiornamento del DB lascerebbe un riferimento più sbagliato, non più sicuro).

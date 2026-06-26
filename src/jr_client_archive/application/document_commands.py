@@ -21,6 +21,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
+from jr_client_archive.application.license_guard import ensure_writable
 from jr_client_archive.config.paths import get_app_paths
 from jr_client_archive.config.settings import SettingsService
 from jr_client_archive.db.base import Database
@@ -40,6 +41,7 @@ from jr_client_archive.utils.document_naming import render_document_stem
 def add_document(
     database: Database, client_id: int, folder_id: int, source_path: Path, *, username: str
 ) -> DocumentRead:
+    ensure_writable(database)
     archive_root = get_app_paths().archive_root
     fs_service = FilesystemService(archive_root)
 
@@ -93,6 +95,7 @@ def add_document(
 def catalog_document(
     database: Database, document_id: int, payload: DocumentCatalogUpdate, *, username: str
 ) -> DocumentRead:
+    ensure_writable(database)
     archive_root = get_app_paths().archive_root
     fs_service = FilesystemService(archive_root)
 

@@ -51,6 +51,7 @@ from jr_client_archive.application.document_commands import add_document
 from jr_client_archive.application.document_queries import list_documents_to_verify
 from jr_client_archive.application.external_sync_commands import reconcile_external_move
 from jr_client_archive.application.folder_queries import get_root_folder
+from jr_client_archive.application.license_queries import get_license_status
 from jr_client_archive.config import branding
 from jr_client_archive.config.paths import AppPaths
 from jr_client_archive.db.base import Database
@@ -61,6 +62,7 @@ from jr_client_archive.ui.dialogs.client_dossier_dialog import ClientDossierDial
 from jr_client_archive.ui.dialogs.custom_fields_manager_dialog import CustomFieldsManagerDialog
 from jr_client_archive.ui.dialogs.document_match_dialog import DocumentMatchDialog
 from jr_client_archive.ui.dialogs.global_search_dialog import GlobalSearchDialog
+from jr_client_archive.ui.dialogs.license_dialog import LicenseDialog
 from jr_client_archive.ui.dialogs.new_client_dialog import NewClientDialog
 from jr_client_archive.utils.current_user import get_current_username
 
@@ -106,11 +108,18 @@ class MainWindow(QMainWindow):
         backup_button = QPushButton("Backup e ripristino...")
         backup_button.clicked.connect(self._on_backup_clicked)
 
+        license_button = QPushButton("Licenza...")
+        license_button.clicked.connect(self._on_license_clicked)
+
         buttons_layout = QHBoxLayout()
         buttons_layout.addWidget(new_client_button)
         buttons_layout.addWidget(custom_fields_button)
         buttons_layout.addWidget(global_search_button)
         buttons_layout.addWidget(backup_button)
+        buttons_layout.addWidget(license_button)
+
+        self._license_banner = QLabel()
+        self._license_banner.setWordWrap(True)
 
         self._stats_label = QLabel()
 
@@ -118,6 +127,7 @@ class MainWindow(QMainWindow):
         self._to_verify_list.itemDoubleClicked.connect(self._on_to_verify_double_clicked)
 
         layout = QVBoxLayout()
+        layout.addWidget(self._license_banner)
         layout.addWidget(self._search_box)
         layout.addWidget(self._client_list)
         layout.addLayout(buttons_layout)
@@ -138,6 +148,24 @@ class MainWindow(QMainWindow):
         clients = list_clients(self._database)
         self._populate(clients)
         self._stats_label.setText(f"Clienti attivi: {count_active_clients(self._database)}")
+        self._reload_license_banner()
+
+    def _reload_license_banner(self) -> None:
+        status = get_license_status(self._database)
+        if status.is_activated:
+            self._license_banner.setText("")
+            self._license_banner.setVisible(False)
+            return
+        self._license_banner.setVisible(True)
+        if status.is_demo_expired:
+            self._license_banner.setText(
+                "Versione demo scaduta - sola lettura. Attiva una licenza per modificare i dati."
+            )
+        else:
+            self._license_banner.setText(
+                f"Versione demo - {status.days_remaining} giorni rimanenti "
+                f"(max {status.max_demo_clients} clienti)."
+            )
 
     def _reload_to_verify(self) -> None:
         self._to_verify_list.clear()
@@ -211,6 +239,11 @@ class MainWindow(QMainWindow):
         if dialog.restored:
             self._reload_clients()
             self._reload_to_verify()
+
+    def _on_license_clicked(self) -> None:
+        dialog = LicenseDialog(self._database, username=self._username, parent=self)
+        dialog.exec()
+        self._reload_license_banner()
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if event.mimeData().hasUrls():
