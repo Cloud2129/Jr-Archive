@@ -5,17 +5,25 @@ double-click, and gives access to the custom-fields manager. Also accepts
 documents dropped directly onto the window: the drag&drop recognition
 engine suggests a client, the user confirms (or picks one by hand), and the
 document lands in that client's root folder as ``TO_VERIFY`` - same place
-the "documenti da verificare" panel below pulls from. Preview and the
-watchdog-based external sync still arrive in later phases - this window
-owns no business logic, it only calls into ``application`` and reflects
-the result.
+the "documenti da verificare" panel below pulls from. This window owns no
+business logic, it only calls into ``application`` and reflects the
+result.
+
+It also (optionally - see ``start_external_sync``) hosts the watchdog
+filesystem watcher that keeps the database in sync when a document/folder
+gets renamed or moved outside the app. The watcher's callback runs on a
+background thread, so it only ever talks to this window through a
+``QObject`` signal: Qt automatically queues a cross-thread signal emission
+onto the receiver's thread, which is what lets ``_on_external_move`` use
+the database/UI exactly like every other slot here, with no extra locking.
 """
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QDialog,
@@ -41,16 +49,27 @@ from jr_client_archive.application.client_queries import (
 )
 from jr_client_archive.application.document_commands import add_document
 from jr_client_archive.application.document_queries import list_documents_to_verify
+from jr_client_archive.application.external_sync_commands import reconcile_external_move
 from jr_client_archive.application.folder_queries import get_root_folder
 from jr_client_archive.config import branding
 from jr_client_archive.config.paths import AppPaths
 from jr_client_archive.db.base import Database
 from jr_client_archive.domain.enums import EntityType
+from jr_client_archive.services.folder_watch_service import FolderWatchService
 from jr_client_archive.ui.dialogs.client_dossier_dialog import ClientDossierDialog
 from jr_client_archive.ui.dialogs.custom_fields_manager_dialog import CustomFieldsManagerDialog
 from jr_client_archive.ui.dialogs.document_match_dialog import DocumentMatchDialog
 from jr_client_archive.ui.dialogs.new_client_dialog import NewClientDialog
 from jr_client_archive.utils.current_user import get_current_username
+
+logger = logging.getLogger(__name__)
+
+
+class _ExternalSyncBridge(QObject):
+    """Lives on the main thread; the watchdog thread only ever calls
+    ``moved.emit`` on it, never touches the database or any widget."""
+
+    moved = Signal(str, str, bool)
 
 
 class MainWindow(QMainWindow):
@@ -59,6 +78,7 @@ class MainWindow(QMainWindow):
         self._database = database
         self._paths = paths
         self._username = get_current_username()
+        self._folder_watch_service: FolderWatchService | None = None
 
         self.setWindowTitle(f"{APP_NAME} - {branding.BRAND_CLAIM}")
         self.resize(960, 640)
@@ -199,3 +219,35 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Errore", f"Impossibile importare il documento:\n{exc}")
             return
         self._reload_to_verify()
+
+    def start_external_sync(self) -> None:
+        """Starts the watchdog filesystem watcher.
+
+        Not called from ``__init__``: spinning up a real OS-level watcher
+        is appropriate for the running application, never for tests that
+        construct a ``MainWindow`` against a throwaway ``tmp_path``.
+        """
+        self._paths.archive_root.mkdir(parents=True, exist_ok=True)
+        bridge = _ExternalSyncBridge(self)
+        bridge.moved.connect(self._on_external_move)
+        self._folder_watch_service = FolderWatchService(self._paths.archive_root, bridge.moved.emit)
+        self._folder_watch_service.start()
+
+    def _on_external_move(self, old_relative_path: str, new_relative_path: str, is_directory: bool) -> None:
+        try:
+            reconciled = reconcile_external_move(
+                self._database, old_relative_path, new_relative_path, is_directory=is_directory
+            )
+        except Exception:
+            logger.exception(
+                "Sincronizzazione esterna non riuscita per '%s' -> '%s'", old_relative_path, new_relative_path
+            )
+            return
+        if reconciled:
+            self._reload_clients()
+            self._reload_to_verify()
+
+    def closeEvent(self, event) -> None:
+        if self._folder_watch_service is not None:
+            self._folder_watch_service.stop()
+        super().closeEvent(event)

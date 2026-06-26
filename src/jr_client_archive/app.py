@@ -34,6 +34,7 @@ def main() -> int:
     _apply_theme(app, database)
 
     window = MainWindow(database=database, paths=paths)
+    window.start_external_sync()
     window.show()
 
     exit_code = app.exec()
