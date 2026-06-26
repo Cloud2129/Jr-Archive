@@ -12,3 +12,12 @@ def list_folders_for_client(database: Database, client_id: int) -> list[FolderRe
         return [FolderRead.model_validate(folder) for folder in folders]
     finally:
         session.close()
+
+
+def get_root_folder(database: Database, client_id: int) -> FolderRead | None:
+    session = database.create_session()
+    try:
+        folder = FolderRepository(session).get_client_root_folder(client_id)
+        return FolderRead.model_validate(folder) if folder else None
+    finally:
+        session.close()
