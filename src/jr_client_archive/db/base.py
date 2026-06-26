@@ -16,6 +16,8 @@ from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
+from jr_client_archive.db.search_index import ensure_search_index
+
 
 class Base(DeclarativeBase):
     """Shared declarative base for every ORM model in the application."""
@@ -49,6 +51,7 @@ class Database:
         this method.
         """
         Base.metadata.create_all(self.engine)
+        ensure_search_index(self.engine)
 
     def dispose(self) -> None:
         self.engine.dispose()

@@ -65,3 +65,20 @@ def test_custom_fields_button_opens_manager(qtbot, database, app_paths, monkeypa
     window._on_custom_fields_clicked()
 
     assert called.get("opened") is True
+
+
+def test_global_search_button_opens_dialog_and_reloads_dashboard(qtbot, database, app_paths, monkeypatch, tmp_path):
+    paths = AppPaths(root=tmp_path)
+    window = MainWindow(database=database, paths=paths)
+    qtbot.addWidget(window)
+
+    called = {}
+
+    def _fake_exec(self):
+        called["opened"] = True
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(main_window_module.GlobalSearchDialog, "exec", _fake_exec)
+    window._on_global_search_clicked()
+
+    assert called.get("opened") is True

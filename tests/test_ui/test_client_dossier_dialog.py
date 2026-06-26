@@ -174,6 +174,36 @@ def test_dossier_preview_falls_back_for_unsupported_document(qtbot, database, ap
     assert dialog._preview_open_button.isHidden() is False
 
 
+def test_dossier_preselects_document_via_select_document_id(qtbot, database, app_paths, monkeypatch, tmp_path):
+    client = _create_client(database)
+    dialog = ClientDossierDialog(database, client, username="t")
+    qtbot.addWidget(dialog)
+
+    monkeypatch.setattr(
+        dossier_module.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(tmp_path / "a.pdf"), ""))
+    )
+    (tmp_path / "a.pdf").write_bytes(b"a")
+    dialog._on_upload_document()
+    monkeypatch.setattr(
+        dossier_module.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(tmp_path / "b.pdf"), ""))
+    )
+    (tmp_path / "b.pdf").write_bytes(b"b")
+    dialog._on_upload_document()
+
+    second_document_id = next(
+        d.id for d in list_documents_for_client(database, client.id) if d.original_filename == "b.pdf"
+    )
+
+    preselecting_dialog = ClientDossierDialog(
+        database, client, username="t", select_document_id=second_document_id
+    )
+    qtbot.addWidget(preselecting_dialog)
+
+    selected = preselecting_dialog._selected_document()
+    assert selected is not None
+    assert selected.id == second_document_id
+
+
 def test_dossier_open_external_delegates_to_desktop_services(qtbot, database, app_paths, monkeypatch, tmp_path):
     client = _create_client(database)
     dialog = ClientDossierDialog(database, client, username="t")

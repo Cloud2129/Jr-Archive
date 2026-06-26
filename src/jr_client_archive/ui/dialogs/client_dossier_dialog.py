@@ -52,7 +52,15 @@ from jr_client_archive.ui.widgets.custom_field_form import CustomFieldFormWidget
 
 
 class ClientDossierDialog(QDialog):
-    def __init__(self, database: Database, client: ClientRead, *, username: str, parent=None) -> None:
+    def __init__(
+        self,
+        database: Database,
+        client: ClientRead,
+        *,
+        username: str,
+        parent=None,
+        select_document_id: int | None = None,
+    ) -> None:
         super().__init__(parent)
         self._database = database
         self._client = client
@@ -60,6 +68,7 @@ class ClientDossierDialog(QDialog):
 
         self.setWindowTitle(f"Fascicolo - {client.display_name}")
         self.resize(560, 640)
+        self._select_document_id = select_document_id
 
         layout = QVBoxLayout(self)
         layout.addWidget(self._build_anagrafica_section())
@@ -200,12 +209,19 @@ class ClientDossierDialog(QDialog):
 
     def _reload_documents(self) -> None:
         self._documents_list.clear()
+        selected_item = None
         for document in list_documents_for_client(self._database, self._client.id):
             status_label = "Da verificare" if document.status == DocumentStatus.TO_VERIFY else "Catalogato"
             item = QListWidgetItem(f"[{status_label}] {document.original_filename} -> {document.stored_filename}")
             item.setData(Qt.ItemDataRole.UserRole, document)
             self._documents_list.addItem(item)
-        self._update_preview()
+            if self._select_document_id is not None and document.id == self._select_document_id:
+                selected_item = item
+        self._select_document_id = None
+        if selected_item is not None:
+            self._documents_list.setCurrentItem(selected_item)
+        else:
+            self._update_preview()
 
     def _selected_document(self) -> DocumentRead | None:
         item = self._documents_list.currentItem()

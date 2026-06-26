@@ -24,7 +24,7 @@ import logging
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, Signal
-from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
@@ -59,6 +59,7 @@ from jr_client_archive.services.folder_watch_service import FolderWatchService
 from jr_client_archive.ui.dialogs.client_dossier_dialog import ClientDossierDialog
 from jr_client_archive.ui.dialogs.custom_fields_manager_dialog import CustomFieldsManagerDialog
 from jr_client_archive.ui.dialogs.document_match_dialog import DocumentMatchDialog
+from jr_client_archive.ui.dialogs.global_search_dialog import GlobalSearchDialog
 from jr_client_archive.ui.dialogs.new_client_dialog import NewClientDialog
 from jr_client_archive.utils.current_user import get_current_username
 
@@ -96,9 +97,15 @@ class MainWindow(QMainWindow):
         custom_fields_button = QPushButton("Campi personalizzati...")
         custom_fields_button.clicked.connect(self._on_custom_fields_clicked)
 
+        global_search_button = QPushButton("Ricerca globale (Ctrl+F)")
+        global_search_button.clicked.connect(self._on_global_search_clicked)
+        global_search_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
+        global_search_shortcut.activated.connect(self._on_global_search_clicked)
+
         buttons_layout = QHBoxLayout()
         buttons_layout.addWidget(new_client_button)
         buttons_layout.addWidget(custom_fields_button)
+        buttons_layout.addWidget(global_search_button)
 
         self._stats_label = QLabel()
 
@@ -186,6 +193,12 @@ class MainWindow(QMainWindow):
     def _on_custom_fields_clicked(self) -> None:
         dialog = CustomFieldsManagerDialog(self._database, EntityType.CLIENT, username=self._username, parent=self)
         dialog.exec()
+
+    def _on_global_search_clicked(self) -> None:
+        dialog = GlobalSearchDialog(self._database, username=self._username, parent=self)
+        dialog.exec()
+        self._reload_clients()
+        self._reload_to_verify()
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         if event.mimeData().hasUrls():
