@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+.DS_Store
+
+# Local runtime data (database, archive, logs, backups) never belongs in git
+*.db
+*.db-wal
+*.db-shm
