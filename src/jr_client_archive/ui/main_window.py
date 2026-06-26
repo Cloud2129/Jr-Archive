@@ -1,28 +1,41 @@
-"""Phase 1 shell of the main dashboard.
+"""Main dashboard.
 
-Proves the full stack (Qt -> application layer -> repository -> SQLite) is
-wired correctly. Client CRUD, drag&drop, "documents to verify" and the
-statistics panel are deliberately out of scope here and arrive in later
-phases - this window only lists/searches existing clients.
+Lists/searches clients, creates new ones, opens the dossier on
+double-click, and gives access to the custom-fields manager. Drag&drop,
+"documents to verify" and the full statistics panel still arrive in later
+phases - this window owns no business logic, it only calls into
+``application`` and reflects the result.
 """
 
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
+    QListWidgetItem,
     QMainWindow,
-    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
 
 from jr_client_archive import APP_NAME, __version__
-from jr_client_archive.application.client_queries import list_clients, search_clients
+from jr_client_archive.application.client_queries import (
+    count_active_clients,
+    get_client,
+    list_clients,
+    search_clients,
+)
 from jr_client_archive.config.paths import AppPaths
 from jr_client_archive.db.base import Database
+from jr_client_archive.domain.enums import EntityType
+from jr_client_archive.ui.dialogs.client_dossier_dialog import ClientDossierDialog
+from jr_client_archive.ui.dialogs.custom_fields_manager_dialog import CustomFieldsManagerDialog
+from jr_client_archive.ui.dialogs.new_client_dialog import NewClientDialog
+from jr_client_archive.utils.current_user import get_current_username
 
 
 class MainWindow(QMainWindow):
@@ -30,6 +43,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._database = database
         self._paths = paths
+        self._username = get_current_username()
 
         self.setWindowTitle(APP_NAME)
         self.resize(960, 640)
@@ -38,14 +52,25 @@ class MainWindow(QMainWindow):
         self._search_box.textChanged.connect(self._on_search_changed)
 
         self._client_list = QListWidget()
+        self._client_list.itemDoubleClicked.connect(self._on_client_double_clicked)
 
         new_client_button = QPushButton("Nuovo cliente")
         new_client_button.clicked.connect(self._on_new_client_clicked)
 
+        custom_fields_button = QPushButton("Campi personalizzati...")
+        custom_fields_button.clicked.connect(self._on_custom_fields_clicked)
+
+        buttons_layout = QHBoxLayout()
+        buttons_layout.addWidget(new_client_button)
+        buttons_layout.addWidget(custom_fields_button)
+
+        self._stats_label = QLabel()
+
         layout = QVBoxLayout()
         layout.addWidget(self._search_box)
         layout.addWidget(self._client_list)
-        layout.addWidget(new_client_button)
+        layout.addLayout(buttons_layout)
+        layout.addWidget(self._stats_label)
 
         central = QWidget()
         central.setLayout(layout)
@@ -58,6 +83,7 @@ class MainWindow(QMainWindow):
     def _reload_clients(self) -> None:
         clients = list_clients(self._database)
         self._populate(clients)
+        self._stats_label.setText(f"Clienti attivi: {count_active_clients(self._database)}")
 
     def _on_search_changed(self, term: str) -> None:
         clients = search_clients(self._database, term)
@@ -69,11 +95,26 @@ class MainWindow(QMainWindow):
             self._client_list.addItem("Nessun cliente. Trascina un documento o crea un nuovo cliente.")
             return
         for client in clients:
-            self._client_list.addItem(f"{client.client_code} - {client.display_name}")
+            item = QListWidgetItem(f"{client.client_code} - {client.display_name}")
+            item.setData(Qt.ItemDataRole.UserRole, client.id)
+            self._client_list.addItem(item)
 
     def _on_new_client_clicked(self) -> None:
-        QMessageBox.information(
-            self,
-            "Nuovo cliente",
-            "La gestione completa dei clienti arriva nella Fase 2.",
-        )
+        dialog = NewClientDialog(self._database, username=self._username, parent=self)
+        if dialog.exec():
+            self._reload_clients()
+
+    def _on_client_double_clicked(self, item: QListWidgetItem) -> None:
+        client_id = item.data(Qt.ItemDataRole.UserRole)
+        if client_id is None:
+            return
+        client = get_client(self._database, client_id)
+        if client is None:
+            return
+        dialog = ClientDossierDialog(self._database, client, username=self._username, parent=self)
+        dialog.exec()
+        self._reload_clients()
+
+    def _on_custom_fields_clicked(self) -> None:
+        dialog = CustomFieldsManagerDialog(self._database, EntityType.CLIENT, username=self._username, parent=self)
+        dialog.exec()

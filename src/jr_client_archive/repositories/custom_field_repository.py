@@ -1,10 +1,30 @@
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import select
 
 from jr_client_archive.db.models.custom_field import CustomFieldDefinition, CustomFieldValue
 from jr_client_archive.domain.enums import CustomFieldType, EntityType
 from jr_client_archive.repositories.base import BaseRepository
+
+
+def extract_python_value(value: CustomFieldValue, field_type: CustomFieldType) -> Any:
+    """Read the one typed column that ``field_type`` actually uses.
+
+    Mirrors the routing in :meth:`CustomFieldValueRepository.set_value` so
+    the two stay in lockstep: whichever column ``set_value`` writes is the
+    one this reads back from.
+    """
+    if field_type in (CustomFieldType.TEXT, CustomFieldType.CHOICE):
+        return value.value_text
+    if field_type is CustomFieldType.NUMBER:
+        return value.value_number
+    if field_type is CustomFieldType.DATE:
+        return value.value_date
+    if field_type is CustomFieldType.BOOLEAN:
+        return value.value_bool
+    return None
 
 
 class CustomFieldDefinitionRepository(BaseRepository[CustomFieldDefinition]):

@@ -29,6 +29,20 @@ class CustomFieldDefinitionRead(CustomFieldDefinitionCreate):
     id: int
 
 
+class CustomFieldDefinitionUpdate(BaseModel):
+    """Only label/required/choices can change after creation.
+
+    ``field_type``, ``entity_type`` and ``field_key`` are immutable: any of
+    them changing would orphan already-stored values (a NUMBER value
+    sitting in ``value_number`` makes no sense if the field becomes TEXT).
+    To change the type, delete the field and create a new one.
+    """
+
+    label: str | None = None
+    is_required: bool | None = None
+    choices: list[str] | None = None
+
+
 class CustomFieldValueInput(BaseModel):
     """A single value submitted by the UI for one field on one entity.
 

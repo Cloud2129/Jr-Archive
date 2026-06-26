@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from jr_client_archive.db.models.client import Client
 from jr_client_archive.repositories.base import BaseRepository
@@ -11,6 +11,18 @@ class ClientRepository(BaseRepository[Client]):
 
     def get_by_code(self, client_code: str) -> Client | None:
         return self._session.scalar(select(Client).where(Client.client_code == client_code))
+
+    def list_active(self) -> list[Client]:
+        return list(
+            self._session.scalars(
+                select(Client).where(Client.is_active.is_(True)).order_by(Client.last_name, Client.company_name)
+            )
+        )
+
+    def count_active(self) -> int:
+        return self._session.scalar(
+            select(func.count()).select_from(Client).where(Client.is_active.is_(True))
+        )
 
     def search(self, term: str) -> list[Client]:
         """Instant search across the fields a user would actually type.
