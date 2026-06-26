@@ -126,3 +126,71 @@ def test_dossier_classifies_selected_document(qtbot, database, app_paths, monkey
     documents = list_documents_for_client(database, client.id)
     assert documents[0].status == DocumentStatus.CATALOGUED
     assert documents[0].document_type == "Fattura"
+
+
+def test_dossier_shows_placeholder_when_no_document_selected(qtbot, database, app_paths):
+    client = _create_client(database)
+    dialog = ClientDossierDialog(database, client, username="t")
+    qtbot.addWidget(dialog)
+
+    assert "Seleziona un documento" in dialog._preview_label.text()
+    assert dialog._preview_open_button.isVisible() is False
+
+
+def test_dossier_preview_renders_image_document(qtbot, database, app_paths, monkeypatch, tmp_path):
+    from PIL import Image
+
+    client = _create_client(database)
+    dialog = ClientDossierDialog(database, client, username="t")
+    qtbot.addWidget(dialog)
+
+    source = tmp_path / "foto.png"
+    Image.new("RGB", (200, 150), color="red").save(source)
+    monkeypatch.setattr(
+        dossier_module.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(source), ""))
+    )
+    dialog._on_upload_document()
+    dialog._documents_list.setCurrentRow(0)
+
+    assert dialog._preview_label.text() == ""
+    assert not dialog._preview_label.pixmap().isNull()
+    assert dialog._preview_open_button.isHidden() is False
+
+
+def test_dossier_preview_falls_back_for_unsupported_document(qtbot, database, app_paths, monkeypatch, tmp_path):
+    client = _create_client(database)
+    dialog = ClientDossierDialog(database, client, username="t")
+    qtbot.addWidget(dialog)
+
+    source = tmp_path / "fattura.pdf"
+    source.write_bytes(b"non e' un pdf valido")
+    monkeypatch.setattr(
+        dossier_module.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(source), ""))
+    )
+    dialog._on_upload_document()
+    dialog._documents_list.setCurrentRow(0)
+
+    assert "non disponibile" in dialog._preview_label.text()
+    assert dialog._preview_open_button.isHidden() is False
+
+
+def test_dossier_open_external_delegates_to_desktop_services(qtbot, database, app_paths, monkeypatch, tmp_path):
+    client = _create_client(database)
+    dialog = ClientDossierDialog(database, client, username="t")
+    qtbot.addWidget(dialog)
+
+    source = tmp_path / "fattura.pdf"
+    source.write_bytes(b"non e' un pdf valido")
+    monkeypatch.setattr(
+        dossier_module.QFileDialog, "getOpenFileName", staticmethod(lambda *a, **k: (str(source), ""))
+    )
+    dialog._on_upload_document()
+    dialog._documents_list.setCurrentRow(0)
+
+    opened = {}
+    monkeypatch.setattr(
+        dossier_module.QDesktopServices, "openUrl", staticmethod(lambda url: opened.setdefault("url", url))
+    )
+    dialog._on_open_external()
+
+    assert opened["url"].toLocalFile() == str(dialog._preview_path)

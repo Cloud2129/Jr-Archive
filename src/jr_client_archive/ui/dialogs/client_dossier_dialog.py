@@ -1,22 +1,25 @@
 """'Fascicolo cliente' - view and edit one client.
 
-Preview and the drag&drop recognition engine are deliberately out of scope
-here: they belong to later Fase 3 increments. This dialog covers
-anagrafica, custom fields, notes, timestamps, the folder tree, and the
-manual document upload/classify workflow.
+The drag&drop recognition engine is deliberately out of scope here: it
+belongs to the main window. This dialog covers anagrafica, custom fields,
+notes, timestamps, the folder tree, the manual document upload/classify
+workflow, and a preview of the selected document (rendered inline for PDF
+and images, "open with the system app" for everything else).
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QUrl, Qt
+from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QFileDialog,
     QFormLayout,
+    QHBoxLayout,
     QInputDialog,
     QLabel,
     QLineEdit,
@@ -37,11 +40,13 @@ from jr_client_archive.application.document_commands import add_document, catalo
 from jr_client_archive.application.document_queries import list_documents_for_client
 from jr_client_archive.application.folder_commands import create_subfolder
 from jr_client_archive.application.folder_queries import list_folders_for_client
+from jr_client_archive.config.paths import get_app_paths
 from jr_client_archive.db.base import Database
 from jr_client_archive.domain.client import ClientRead, ClientUpdate
 from jr_client_archive.domain.document import DocumentRead
 from jr_client_archive.domain.enums import ClientType, DocumentStatus, EntityType
 from jr_client_archive.domain.folder import FolderRead
+from jr_client_archive.services.document_preview_service import PreviewKind, build_preview
 from jr_client_archive.ui.dialogs.document_catalog_dialog import DocumentCatalogDialog
 from jr_client_archive.ui.widgets.custom_field_form import CustomFieldFormWidget
 
@@ -155,21 +160,42 @@ class ClientDossierDialog(QDialog):
 
     def _build_documents_section(self) -> QWidget:
         self._documents_list = QListWidget()
-        self._reload_documents()
+        self._documents_list.itemSelectionChanged.connect(self._update_preview)
 
         upload_button = QPushButton("Carica documento...")
         upload_button.clicked.connect(self._on_upload_document)
         classify_button = QPushButton("Classifica...")
         classify_button.clicked.connect(self._on_classify_document)
 
+        self._preview_path: Path | None = None
+        self._preview_label = QLabel("Seleziona un documento per l'anteprima.")
+        self._preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._preview_label.setMinimumHeight(220)
+        self._preview_label.setWordWrap(True)
+        self._preview_open_button = QPushButton("Apri con applicazione predefinita")
+        self._preview_open_button.setVisible(False)
+        self._preview_open_button.clicked.connect(self._on_open_external)
+
+        documents_layout = QVBoxLayout()
+        documents_layout.addWidget(self._documents_list)
+        documents_layout.addWidget(upload_button)
+        documents_layout.addWidget(classify_button)
+
+        preview_layout = QVBoxLayout()
+        preview_layout.addWidget(self._preview_label)
+        preview_layout.addWidget(self._preview_open_button)
+
+        columns = QHBoxLayout()
+        columns.addLayout(documents_layout)
+        columns.addLayout(preview_layout)
+
         layout = QVBoxLayout()
         layout.addWidget(QLabel("Documenti"))
-        layout.addWidget(self._documents_list)
-        layout.addWidget(upload_button)
-        layout.addWidget(classify_button)
+        layout.addLayout(columns)
 
         widget = QWidget()
         widget.setLayout(layout)
+        self._reload_documents()
         return widget
 
     def _reload_documents(self) -> None:
@@ -179,10 +205,38 @@ class ClientDossierDialog(QDialog):
             item = QListWidgetItem(f"[{status_label}] {document.original_filename} -> {document.stored_filename}")
             item.setData(Qt.ItemDataRole.UserRole, document)
             self._documents_list.addItem(item)
+        self._update_preview()
 
     def _selected_document(self) -> DocumentRead | None:
         item = self._documents_list.currentItem()
         return item.data(Qt.ItemDataRole.UserRole) if item else None
+
+    def _update_preview(self) -> None:
+        document = self._selected_document()
+        if document is None:
+            self._preview_path = None
+            self._preview_label.setPixmap(QPixmap())
+            self._preview_label.setText("Seleziona un documento per l'anteprima.")
+            self._preview_open_button.setVisible(False)
+            return
+
+        self._preview_path = get_app_paths().archive_root / document.relative_path
+        preview = build_preview(self._preview_path, document.extension)
+        if preview.kind == PreviewKind.IMAGE and preview.image_bytes:
+            pixmap = QPixmap()
+            pixmap.loadFromData(preview.image_bytes)
+            self._preview_label.setText("")
+            self._preview_label.setPixmap(
+                pixmap.scaled(320, 320, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            )
+        else:
+            self._preview_label.setPixmap(QPixmap())
+            self._preview_label.setText("Anteprima non disponibile per questo tipo di file.")
+        self._preview_open_button.setVisible(True)
+
+    def _on_open_external(self) -> None:
+        if self._preview_path is not None:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self._preview_path)))
 
     def _target_folder_for_upload(self) -> FolderRead | None:
         folder = self._selected_folder()
